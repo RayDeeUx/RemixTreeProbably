@@ -55,7 +55,7 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
 
 class $modify(MyInfoLayer, InfoLayer) {
 	struct Fields {
-		async::TaskHolder<GDHistoryRemixTreeTask> listener {};
+		async::TaskHolder<WebResponse> listener {};
 	};
 	void onClose(CCObject* sender) {
 		Manager::get()->levelID = 0;
