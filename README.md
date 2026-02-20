@@ -8,6 +8,6 @@ Thanks to Cvolton for their GDHistory API.
 
 API requests to GDHistory are hard-capped at 100 levels. If you want to see more levels (eat my shorts), please read the second paragraph again for a really crucial hint.
 
-Mod idea suggested by [SquareGD/The Bacon Army](https://www.youtube.com/channel/UCLh0ctfFz61WayJhcXjjf1A). Mod name inspired by [Scratch](https://scratch.mit.edu)'s "Remix Tree" feature.
+Mod idea suggested by [SquareGD/The Bacon Army](https://youtube.com/@squaregd). Mod name inspired by [Scratch](https://scratch.mit.edu)'s "Remix Tree" feature.
 
 This [Geode mod](https://geode-sdk.org) is licensed under LGPLv2. 
