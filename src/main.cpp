@@ -1,7 +1,6 @@
 #include <Geode/modify/LevelBrowserLayer.hpp>
 #include <Geode/modify/InfoLayer.hpp>
 #include "Manager.hpp"
-#include "Utils.hpp"
 
 using namespace geode::prelude;
 
@@ -55,7 +54,7 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
 
 class $modify(MyInfoLayer, InfoLayer) {
 	struct Fields {
-		geode::EventListener<GDHistoryRemixTreeTask> listener {};
+		async::TaskHolder<geode::utils::web::WebResponse> listener {};
 	};
 	void onClose(CCObject* sender) {
 		Manager::get()->levelID = 0;
@@ -131,49 +130,118 @@ class $modify(MyInfoLayer, InfoLayer) {
 		this->getParent()->addChild(fakeLoadingScreen);
 		fakeLoadingScreen->runAction(CCFadeTo::create(.1, 64));
 
-		fields->listener.bind(this, &MyInfoLayer::onFetchRemixTreeSuccess);
-		fields->listener.setFilter(Utils::fetchRemixesForLevelID());
-	}
-	void onFetchRemixTreeSuccess(GDHistoryRemixTreeTask::Event* e) {
-		if (!Mod::get()->getSettingValue<bool>("enabled")) return;
-		const auto eventValue = e->getValue();
-		if (!eventValue) return;
-		if (eventValue->isErr()) return FLAlertLayer::create("Oh no!", eventValue->err().value_or("Something went wrong..."), "I Understand")->show();
+		auto req = geode::utils::web::WebRequest();
+		fields->listener.spawn(
+			req.get(fmt::format("https://history.geometrydash.eu/api/v1/search/level/advanced/?filter=cache_original%3D{}&limit=100", Manager::get()->levelID)),
+			[this, fakeLoadingScreen](geode::utils::web::WebResponse response) {
+				fakeLoadingScreen->removeMeAndCleanup();
+				Manager::get()->actualHits = 0;
 
-		if (eventValue->isOk()) {
-			if (CCScene::get() && CCScene::get()->getChildByIDRecursive("fake-loading-screen"_spr)) CCScene::get()->getChildByID("fake-loading-screen"_spr)->removeMeAndCleanup();
-			CCScene* scene = CCScene::create();
-			GJSearchObject* gjso = GJSearchObject::create(SearchType::Type19, eventValue->unwrap());
-			LevelBrowserLayer* lbl = LevelBrowserLayer::create(gjso);
-			scene->addChild(lbl);
+				if (!response.ok() || response.code() != 200) {
+					log::info("GDHistory request failed: {}", response.code());
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Response was not HTTP code 200.)", "I Understand")->show();
+				}
 
-			lbl->setUserObject("remix-tree-results"_spr, CCBool::create(true));
-			lbl->setUserObject("remix-tree-actual-hits"_spr, CCInteger::create(static_cast<int>(Manager::get()->actualHits)));
-			lbl->setUserObject("remix-tree-level-name"_spr, CCString::create(this->m_level->m_levelName));
-			lbl->setUserObject("remix-tree-creator-name"_spr, CCString::create(this->m_level->m_creatorName));
+				auto responseString = response.string();
+				if (responseString.isErr()) {
+					log::info("GDHistory response was not a string");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Response was not a string!)", "I Understand")->show();
+				}
 
-			FLAlertLayer* alert = geode::createQuickPopup(
-				"A Friendly Reminder",
-				"These results are <co>provided by Cvolton's GDHistory API</c> and are <c_>FOR REFERENCE ONLY</c>.\n\n"
-				"By pressing \"I Understand\" or closing this popup, <cg>you agree not to hold anyone besides yourself</c> "
-				"<cg>responsible</c> for <cl>your reactions to these search results</c>.\n\n"
-				"If you <cr>disagree</c> with this, <cr>please press \"Never Mind\" to go back</c>.",
-				"Never Mind", "I Understand", [lbl](auto, const bool btnTwo) {
-					if (btnTwo) return;
-					if (lbl) return lbl->onBack(nullptr);
-					CCDirector::get()->popSceneWithTransition(.5f, PopTransition::kPopTransitionFade);
-				}, false
-			);
-			alert->m_noElasticity = true;
-			scene->addChild(alert);
-			alert->m_scene = scene;
+				auto responseUnwrapped = responseString.unwrap();
+				if (responseUnwrapped.empty()) {
+					log::info("GDHistory response was a string, but unwrapping it failed.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Couldn't unwrap string!)", "I Understand")->show();
+				}
 
-			if (auto rmx = this->m_mainLayer->getChildByID("refresh-menu")->getChildByID("view-remixes-clones-button"_spr)) {
-				static_cast<CCMenuItemSpriteExtra*>(rmx)->setEnabled(true);
-				rmx->setTag(20260111);
+				auto responseAsJSON = matjson::parse(responseString.unwrap());
+				if (responseAsJSON.isErr()) {
+					log::info("GDHistory response was a JSON string, but parsing it failed.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Couldn't JSON-ify string!)", "I Understand")->show();
+				}
+
+				auto responseAsJSONUnwrapped = responseAsJSON.unwrap();
+
+				if ((responseAsJSONUnwrapped.contains("success") && !responseAsJSONUnwrapped["success"].asBool().unwrapOr(false)) || responseAsJSONUnwrapped.contains("error")) {
+					log::info("GDHistory response was a JSON string, but GDHistory returned an error.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Unwrapped JSON-ified string, but GDHistory returned an error!)", "I Understand")->show();
+				}
+
+				if (!responseAsJSONUnwrapped.contains("hits") || !responseAsJSONUnwrapped.contains("estimatedTotalHits")) {
+					log::info("GDHistory response was a JSON string, but no relevant data found.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Unwrapped JSON-ified string, but no relevant data found!)", "I Understand")->show();
+				}
+
+				auto estTotal = responseAsJSONUnwrapped["estimatedTotalHits"].asInt();
+				if (estTotal.isErr()) {
+					log::info("GDHistory response has estimatedTotalHits, but parsing it failed.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Found results, but couldn't parse it!)", "I Understand")->show();
+				}
+
+				auto hitsArray = responseAsJSONUnwrapped["hits"].asArray();
+
+				if (hitsArray.isErr()) {
+					log::info("GDHistory response has relevant data, but parsing it failed.");
+					return FLAlertLayer::create("Oh no!", "Something went wrong... (Found results, but couldn't parse it!)", "I Understand")->show();
+				}
+
+				auto unwrappedHits = hitsArray.unwrap();
+				if (unwrappedHits.empty()) {
+					log::info("GDHistory response has relevant data, but there was nothing.");
+					return FLAlertLayer::create("Oh no!", "No one has remixed or cloned this level.\n\n<cy>That's either good news or bad news... Who knows?</c>", "I Understand")->show();
+				}
+
+				std::vector<int> levelIDRemixes = {};
+				for (matjson::Value entry : unwrappedHits) {
+					if (!entry.contains("online_id") || entry["online_id"].asInt().isErr() || entry["online_id"].asInt().unwrap() == Manager::get()->levelID) continue;
+
+					if (entry.contains("is_public") && entry["is_public"].asBool().isOk() && !entry["is_public"].asBool().unwrap()) continue;
+					if (entry.contains("is_deleted") && entry["is_deleted"].asBool().isOk() && entry["is_deleted"].asBool().unwrap()) continue;
+
+					levelIDRemixes.push_back(static_cast<int>(entry["online_id"].asInt().unwrap()));
+				}
+
+				if (levelIDRemixes.empty()) {
+					log::info("GDHistory response has relevant data, but all the levels have been deleted or are private.");
+					return FLAlertLayer::create("Oh no!", "No one has made a <cj>public</c> remix of this level.\n\n<cy>That's either good news or bad news... Who knows?</c>", "I Understand")->show();
+				}
+
+				Manager::get()->actualHits = estTotal.unwrap();
+				const std::string& listOfLevels = fmt::format("{}", fmt::join(levelIDRemixes.begin(), levelIDRemixes.end(), ","));
+				
+				CCScene* scene = CCScene::create();
+				GJSearchObject* gjso = GJSearchObject::create(SearchType::Type19, listOfLevels);
+				LevelBrowserLayer* lbl = LevelBrowserLayer::create(gjso);
+				scene->addChild(lbl);
+
+				lbl->setUserObject("remix-tree-results"_spr, CCBool::create(true));
+				lbl->setUserObject("remix-tree-actual-hits"_spr, CCInteger::create(static_cast<int>(Manager::get()->actualHits)));
+				lbl->setUserObject("remix-tree-level-name"_spr, CCString::create(this->m_level->m_levelName));
+				lbl->setUserObject("remix-tree-creator-name"_spr, CCString::create(this->m_level->m_creatorName));
+
+				FLAlertLayer* alert = geode::createQuickPopup(
+					"A Friendly Reminder",
+					"These results are <co>provided by Cvolton's GDHistory API</c> and are <c_>FOR REFERENCE ONLY</c>.\n\n"
+					"By pressing \"I Understand\" or closing this popup, <cg>you agree not to hold anyone besides yourself</c> "
+					"<cg>responsible</c> for <cl>your reactions to these search results</c>.\n\n"
+					"If you <cr>disagree</c> with this, <cr>please press \"Never Mind\" to go back</c>.",
+					"Never Mind", "I Understand", [lbl](auto, const bool btnTwo) {
+						if (btnTwo) return;
+						if (lbl) return lbl->onBack(nullptr);
+						CCDirector::get()->popSceneWithTransition(.5f, PopTransition::kPopTransitionFade);
+					}, false
+				);
+				alert->m_noElasticity = true;
+				scene->addChild(alert);
+				alert->m_scene = scene;
+
+				if (auto rmx = this->m_mainLayer->getChildByID("refresh-menu")->getChildByID("view-remixes-clones-button"_spr)) {
+					static_cast<CCMenuItemSpriteExtra*>(rmx)->setEnabled(true);
+					rmx->setTag(20260111);
+				}
+
+				CCDirector::get()->pushScene(CCTransitionFade::create(.5f, scene));
 			}
-
-			CCDirector::get()->pushScene(CCTransitionFade::create(.5f, scene));
-		}
+		);
 	}
 };

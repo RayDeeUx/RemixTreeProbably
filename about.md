@@ -12,6 +12,6 @@ Thanks to Cvolton for their GDHistory API.
 
 <c-ff0000>***__Using this mod should not be a justification/excuse to harass other level creators (or the developers who made this mod possible) for whatever reason you see fit as a result of viewing the search results.__***</c>
 
-Mod idea suggested by [SquareGD/The Bacon Army](https://www.youtube.com/channel/UCLh0ctfFz61WayJhcXjjf1A). Mod name inspired by [Scratch](https://scratch.mit.edu)'s "Remix Tree" feature.
+Mod idea suggested by [SquareGD/The Bacon Army](https://youtube.com/@squaregd). Mod name inspired by [Scratch](https://scratch.mit.edu)'s "Remix Tree" feature.
 
 This [Geode mod](https://geode-sdk.org) is licensed under LGPLv2. To report bugs or get help with using my mods, press the Discord button in the lower left corner.
