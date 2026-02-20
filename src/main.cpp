@@ -131,10 +131,10 @@ class $modify(MyInfoLayer, InfoLayer) {
 		this->getParent()->addChild(fakeLoadingScreen);
 		fakeLoadingScreen->runAction(CCFadeTo::create(.1, 64));
 
-		// fields->listener.bind(this, &MyInfoLayer::onFetchRemixTreeSuccess);
+		auto req = geode::utils::web::WebRequest();
 		fields->listener.spawn(
-			geode::utils::web::WebRequest().get(fmt::format("https://history.geometrydash.eu/api/v1/search/level/advanced/?filter=cache_original%3D{}&limit=100", Manager::get()->levelID)),
-			[fakeLoadingScreen](geode::utils::web::WebResponse response) {
+			req.get(fmt::format("https://history.geometrydash.eu/api/v1/search/level/advanced/?filter=cache_original%3D{}&limit=100", Manager::get()->levelID)),
+			[this, fakeLoadingScreen](geode::utils::web::WebResponse response) {
 				fakeLoadingScreen->removeMeAndCleanup();
 				Manager::get()->actualHits = 0;
 
