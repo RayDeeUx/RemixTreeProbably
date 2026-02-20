@@ -57,6 +57,7 @@ class $modify(MyInfoLayer, InfoLayer) {
 		async::TaskHolder<geode::utils::web::WebResponse> listener {};
 	};
 	void onClose(CCObject* sender) {
+		if (CCScene::get() && CCScene::get()->getChildByIDRecursive("fake-loading-screen"_spr)) CCScene::get()->getChildByID("fake-loading-screen"_spr)->removeMeAndCleanup();
 		Manager::get()->levelID = 0;
 		Manager::get()->actualHits = 0;
 		InfoLayer::onClose(sender);
@@ -133,8 +134,8 @@ class $modify(MyInfoLayer, InfoLayer) {
 		auto req = geode::utils::web::WebRequest();
 		fields->listener.spawn(
 			req.get(fmt::format("https://history.geometrydash.eu/api/v1/search/level/advanced/?filter=cache_original%3D{}&limit=100", Manager::get()->levelID)),
-			[this, fakeLoadingScreen](geode::utils::web::WebResponse response) {
-				fakeLoadingScreen->removeMeAndCleanup();
+			[this, Ref(fakeLoadingScreen)](geode::utils::web::WebResponse response) {
+				if (fakeLoadingScreen) fakeLoadingScreen->removeMeAndCleanup();
 				Manager::get()->actualHits = 0;
 
 				if (!response.ok() || response.code() != 200) {
