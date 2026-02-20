@@ -131,8 +131,8 @@ class $modify(MyInfoLayer, InfoLayer) {
 		this->getParent()->addChild(fakeLoadingScreen);
 		fakeLoadingScreen->runAction(CCFadeTo::create(.1, 64));
 
-		fields->listener.bind(this, &MyInfoLayer::onFetchRemixTreeSuccess);
-		fields->listener.setFilter(Utils::fetchRemixesForLevelID());
+		// fields->listener.bind(this, &MyInfoLayer::onFetchRemixTreeSuccess);
+		fields->listener.spawn(Utils::fetchRemixesForLevelID());
 	}
 	void onFetchRemixTreeSuccess(GDHistoryRemixTreeTask::Event* e) {
 		if (!Mod::get()->getSettingValue<bool>("enabled")) return;
