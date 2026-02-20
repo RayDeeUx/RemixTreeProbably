@@ -14,8 +14,6 @@ project(RemixTreeProbably VERSION 1.0.0)
 add_library(${PROJECT_NAME} SHARED
     src/Manager.cpp
     src/Manager.hpp
-    src/Utils.cpp
-    src/Utils.hpp
     src/main.cpp
     # Add any extra C++ source files here
 )

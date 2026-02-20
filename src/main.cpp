@@ -1,7 +1,6 @@
 #include <Geode/modify/LevelBrowserLayer.hpp>
 #include <Geode/modify/InfoLayer.hpp>
 #include "Manager.hpp"
-#include "Utils.hpp"
 
 using namespace geode::prelude;
 
